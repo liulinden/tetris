@@ -4,7 +4,6 @@ const dpr = Math.ceil(window.devicePixelRatio || 1);
 canvas.width=canvas.clientWidth*dpr;
 canvas.height=canvas.clientHeight*dpr;
 
-
 const ctx= canvas.getContext('2d')
 
 ctx.webkitImageSmoothingEnabled = false;
@@ -14,13 +13,13 @@ ctx.imageSmoothingEnabled = false;
 document.addEventListener("keydown", keyDown)
 document.addEventListener("keyup", keyUp)
 
-const margin=20;
+const margin=40;
 
-const screenHeight=20*Math.round(Math.min(canvas.height-2*margin, (canvas.width-2*margin)*2)/20);
-const screenWidth=screenHeight/2;
-const squareDim = screenHeight/20;
-const screenX=margin+screenWidth-5*squareDim;
-const screenY=margin;
+let screenHeight=20*Math.floor(Math.min(canvas.height-2*margin, (canvas.width-2*margin)*2)/20);
+let screenWidth=screenHeight/2;
+let squareDim = screenHeight/20;
+let screenX=margin+canvas.width/2-5*squareDim;
+let screenY=margin;
 
 const blockLayouts = [
     [[2,0],[2,1],[2,2],[2,3]], //line
@@ -74,6 +73,13 @@ let oldRight= false;
 let oldDown= false
 
 function gameloop() {
+    canvas.width=canvas.clientWidth*dpr;
+    canvas.height=canvas.clientHeight*dpr;
+    screenHeight=20*Math.floor(Math.min(canvas.height-2*margin, (canvas.width-2*margin)*2)/20);
+    screenWidth=screenHeight/2;
+    squareDim = screenHeight/20;
+    screenX=margin+canvas.width/2-5*squareDim;
+    screenY=margin;
 
     if (rotate){
         fallingBlock.rotateClockwise();
@@ -304,7 +310,9 @@ class Block {
             if (this.squares[i][1]==row) this.squares[i][1]=20; // temporary fix, does not actually remove square, only moves it away
             else if (this.squares[i][1]<row) this.squares[i][1]++;
         }
-
+        if (this.squares.length==0) {
+            // remove block (this) from blocks array
+        }
     }
 
     rotateCounterclockwise(){
