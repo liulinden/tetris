@@ -31,6 +31,13 @@ const blockLayouts = [
     [[2,0],[1,1],[2,1],[1,2]]
 ];
 const blockColors = [
+    [0,255,255],
+    [0,0,255],
+    [255,122,0],
+    [255,255,0]
+    [0,255,0],
+    [255,0,255],
+    [255,0,0],
     `rgb(0,255,255)`,
     `rgb(0,0,255)`,
     `rgb(255,122,0)`,
@@ -112,6 +119,9 @@ function gameloop() {
     if (fallTimer % blockFallInteval==0) {
         if (!fallingBlock.fall()) fallingBlock.placeBlock();
     }
+
+    if (fallingBlock.atBottom()) fallingBlock.opacity=0.75+(Math.cos(fallTimer/blockFallInteval*2*Math.PI))/4
+
     drawFrame()
     fallTimer++;
     transformTimer++;
@@ -162,12 +172,16 @@ function drawFrame() {
     for (let i=0;i<blocks.length;i++){
         blocks[i].drawBlock();
     }
-    fallingBlock.drawBlock();
+    if (!gameOver) fallingBlock.drawBlock();
 }
 
-function drawSquare(color,x,y){
-    ctx.fillStyle=color;
-    ctx.fillRect(screenX+x*squareDim,screenY+y*squareDim,squareDim,squareDim); // add 0.5 to x/y coords to get grid effect
+function toOpacity(color,opacity){
+    return 'rgba('+String(color[0])+','+String(color[1])+','+String(color[2])+','+String(opacity)+')';
+}
+
+function drawSquare(color,opacity,x,y){
+    ctx.fillStyle=toOpacity(color,opacity);//toOpacity(color,opacity);
+    ctx.fillRect(screenX+x*squareDim,screenY+y*squareDim,squareDim,squareDim);
 }
 
 function isRowComplete(row){
@@ -192,13 +206,13 @@ class Block {
     
     constructor(i){
         this.id=i;
-        this.placed=false;
         this.xDim=blockDims[this.id][0];
         this.yDim=blockDims[this.id][1];
         this.y=0;
         this.x=5-Math.ceil(blockDims[this.id][0]/2);
         this.squares=structuredClone(blockLayouts[this.id]);
         this.color=blockColors[this.id];
+        this.opacity=1;
 
         for (let i=0; i<this.squares.length; i++){
             this.squares[i][1]=this.y+blockLayouts[this.id][i][1];
@@ -208,14 +222,12 @@ class Block {
 
     drawBlock(){
         for (let i=0; i<this.squares.length; i++){
-            if (this.squares[i][1]>=0 && this.squares[i][1] < 20) drawSquare(this.color, this.squares[i][0], this.squares[i][1]);
+            if (this.squares[i][1]>=0 && this.squares[i][1] < 20) drawSquare(this.color, this.opacity, this.squares[i][0], this.squares[i][1]);
         }
     }
 
     placeBlock(){
-        this.placed=true;
         blocks.push(this)
-        fallingBlock= new Block(Math.floor(Math.random()*7));
         fallTimer=1;
 
         let r1=this.squares[0][1];
@@ -236,6 +248,29 @@ class Block {
         for (let i=0;i<this.squares.length;i++){
             if (this.squares[i][1]<=0) gameOver=true;
         }
+        fallingBlock= new Block(Math.floor(Math.random()*7));
+        if (fallingBlock.isOverlapping()){
+            gameOver=true;
+        }
+    }
+
+    atBottom(){
+        this.y++;
+        for (let i=0;i<this.squares.length;i++){
+            this.squares[i][1]++;
+        }
+        if (this.isOverlapping()){
+            this.y--;
+            for (let i=0;i<this.squares.length;i++){
+                this.squares[i][1]--;
+            }
+            return true;
+        }
+        this.y--;
+        for (let i=0;i<this.squares.length;i++){
+            this.squares[i][1]--;
+        }
+        return false;
     }
 
     isOverlapping(){
