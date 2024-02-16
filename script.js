@@ -15,11 +15,19 @@ document.addEventListener("keyup", keyUp)
 
 const margin=40;
 
-let screenHeight=20*Math.floor(Math.min(canvas.height-2*margin, (canvas.width-2*margin)*2)/20);
-let screenWidth=screenHeight/2;
-let squareDim = screenHeight/20;
-let screenX=margin+canvas.width/2-5*squareDim;
-let screenY=margin;
+let screenHeight=0;
+let screenWidth=0;
+let squareDim = 0;
+let holdWidth = 0;
+let holdHeight = 0;
+let nextWidth = 0;
+let nextHeight = 0;
+let screenX=0;
+let screenY=0;
+let holdX=0;
+let holdY=0;
+let nextX=0;
+let nextY=0;
 
 const blockLayouts = [
     [[2,0],[2,1],[2,2],[2,3]], //line
@@ -34,17 +42,10 @@ const blockColors = [
     [0,255,255],
     [0,0,255],
     [255,122,0],
-    [255,255,0]
+    [255,255,0],
     [0,255,0],
     [255,0,255],
-    [255,0,0],
-    `rgb(0,255,255)`,
-    `rgb(0,0,255)`,
-    `rgb(255,122,0)`,
-    `rgb(255,255,0)`,
-    `rgb(0,255,0)`,
-    `rgb(255,0,255)`,
-    `rgb(255,0,0)`
+    [255,0,0]
 ];
 const blockDims = [
     [4,4],
@@ -64,12 +65,17 @@ let transformTimer=1;
 let fallTimer=1;
 
 let blocks = [];
+let next = [];
+let holdBlock = -1;
 
-let gameOver = false;   
+let gameOver = false;
+let canHold = true;
+
 let downArrow = false;
 let upArrow = false;
 let rightArrow= false;
 let leftArrow= false;
+let cKey = false;
 let rotate = false;
 let oldRotate = false;
 let newLeft = false;
@@ -77,20 +83,31 @@ let newRight = false;
 let newDown=false;
 let oldLeft = false;
 let oldRight= false;
-let oldDown= false
+let oldDown= false;
+let hold = false;
+let oldHold = false;
 
 function gameloop() {
-    canvas.width=canvas.clientWidth*dpr;
-    canvas.height=canvas.clientHeight*dpr;
-    screenHeight=20*Math.floor(Math.min(canvas.height-2*margin, (canvas.width-2*margin)*2)/20);
-    screenWidth=screenHeight/2;
-    squareDim = screenHeight/20;
-    screenX=margin+canvas.width/2-5*squareDim;
-    screenY=margin;
+    setDimensions();
 
     if (rotate){
         fallingBlock.rotateClockwise();
         rotate=false;
+    }
+    if (hold){
+        if (canHold){
+            if (holdBlock==-1) {
+                holdBlock = fallingBlock.id;
+                fallingBlock = new Block(getNext())
+            } 
+            else {
+                let id = holdBlock;
+                holdBlock = fallingBlock.id;
+                fallingBlock = new Block(id);
+            }
+            canHold = false
+        }
+        hold=false;
     }
     if (newDown){
         newDown=false;
@@ -106,6 +123,7 @@ function gameloop() {
     oldRight=rightArrow;
     oldRotate = upArrow;
     oldDown = downArrow;
+    oldHold = cKey;
 
     if (transformTimer % shiftInterval==0){
         shift=0;
@@ -146,6 +164,10 @@ function keyDown(event){
             if (!oldRotate) rotate=true;
             upArrow=true;
             break;
+        case ('c'):
+            if (!oldHold) hold=true;
+            cKey=true;
+            break;
     }
 }
 
@@ -163,25 +185,90 @@ function keyUp(event){
         case ('ArrowUp'):
             upArrow=false;
             break;
+        case ('c'):
+            cKey=false;
+            break;
     }
 }
 
+function setDimensions() {
+    canvas.width=canvas.clientWidth*dpr;
+    canvas.height=canvas.clientHeight*dpr;
+    squareDim=Math.floor(Math.min((canvas.height-2*margin)/20, (canvas.width-4*margin)/20))
+    screenHeight=20*squareDim;
+    screenWidth=10*squareDim;
+    holdWidth = 5 * squareDim;
+    holdHeight = 3 * squareDim;
+    nextWidth = holdWidth;
+    nextHeight = 3 * holdHeight;
+    screenX=canvas.width/2-5*squareDim;
+    screenY=margin;
+    holdX = screenX-margin-holdWidth;
+    holdY=screenY;
+    nextX = screenX+margin+screenWidth;
+    nextY = screenY;
+}
+
 function drawFrame() {
+    ctx.fillStyle='white';
+    ctx.fillRect(0,0,canvas.width,canvas.height)
     ctx.fillStyle='black';
+    ctx.fillRect(holdX,holdY,holdWidth,holdHeight);
+    ctx.fillRect(nextX,nextY,nextWidth,nextHeight);
     ctx.fillRect(screenX,screenY,screenWidth,screenHeight);
     for (let i=0;i<blocks.length;i++){
         blocks[i].drawBlock();
     }
+    drawNextPanel()
+    if (holdBlock != -1){
+        drawBlockCentered(holdBlock, 1, holdX + holdWidth/2, holdY+holdHeight/2)
+    }
     if (!gameOver) fallingBlock.drawBlock();
+}
+
+function drawNextPanel(){
+    for (let i=0;i<next.length;i++){
+        drawBlockCentered(next[i], 1, nextX + nextWidth/2, nextY+holdHeight*(i+0.5))
+    }
+}
+
+function drawBlockCentered(id, rotation, x, y){
+    let squares=structuredClone(blockLayouts[id]);
+    let xDim=blockDims[id][0]
+    let yDim = blockDims[id][1]
+    for (i=0;i<rotation;i++){
+        for (let i=0; i<squares.length; i++){
+            let initx = squares[i][0];
+            let inity = squares[i][1];
+            squares[i][0]=xDim/2+(inity-yDim/2);
+            squares[i][1]=yDim/2-(initx-xDim/2)-1;
+        }
+    }
+    let highest=squares[0][1];
+    let lowest=squares[0][1]
+    let rightest=squares[0][0]
+    let leftest=squares[0][0]
+    for (let i=1; i<squares.length; i++){
+        if (squares[i][0]>rightest) rightest=squares[i][0];
+        if (squares[i][0]<leftest) leftest=squares[i][0];
+        if (squares[i][1]>highest) highest=squares[i][1];
+        if (squares[i][1]<lowest) lowest=squares[i][1];
+    }
+    let centerx=(leftest+rightest+1)/2;
+    let centery=(highest+lowest+1)/2;
+    console.log(lowest,highest,leftest,rightest,centerx,centery);
+    for (let i=0; i<squares.length; i++){
+        if (squares[i][1]>=0 && squares[i][1] < 20) drawSquare(blockColors[id], 1, x-centerx*squareDim, y-centery*squareDim, squares[i][0], squares[i][1]);
+    }
 }
 
 function toOpacity(color,opacity){
     return 'rgba('+String(color[0])+','+String(color[1])+','+String(color[2])+','+String(opacity)+')';
 }
 
-function drawSquare(color,opacity,x,y){
-    ctx.fillStyle=toOpacity(color,opacity);//toOpacity(color,opacity);
-    ctx.fillRect(screenX+x*squareDim,screenY+y*squareDim,squareDim,squareDim);
+function drawSquare(color,opacity,refx, refy, x,y){
+    ctx.fillStyle=toOpacity(color,opacity);
+    ctx.fillRect(Math.floor(refx+x*squareDim),Math.floor(refy+y*squareDim),squareDim,squareDim);
 }
 
 function isRowComplete(row){
@@ -200,6 +287,14 @@ function isRowComplete(row){
         if (!exists) return false;
     }
     return true;
+}
+
+function getNext(){
+    save = next[0];
+    next[0]=next[1];
+    next[1]=next[2];
+    next[2]=Math.floor(Math.random()*7);
+    return save;
 }
 
 class Block {
@@ -222,12 +317,14 @@ class Block {
 
     drawBlock(){
         for (let i=0; i<this.squares.length; i++){
-            if (this.squares[i][1]>=0 && this.squares[i][1] < 20) drawSquare(this.color, this.opacity, this.squares[i][0], this.squares[i][1]);
+            if (this.squares[i][1]>=0 && this.squares[i][1] < 20) drawSquare(this.color, this.opacity, screenX, screenY, this.squares[i][0], this.squares[i][1], 0, 0);
         }
     }
 
     placeBlock(){
-        blocks.push(this)
+        this.opacity=1;
+        blocks.push(this);
+        canHold = true;
         fallTimer=1;
 
         let r1=this.squares[0][1];
@@ -248,7 +345,7 @@ class Block {
         for (let i=0;i<this.squares.length;i++){
             if (this.squares[i][1]<=0) gameOver=true;
         }
-        fallingBlock= new Block(Math.floor(Math.random()*7));
+        fallingBlock= new Block(getNext());
         if (fallingBlock.isOverlapping()){
             gameOver=true;
         }
@@ -385,5 +482,14 @@ class Block {
     }
 }
 
+function startGame(){
+    next=[]
+    for (let i=0;i<3;i++){
+        next.push(Math.floor(Math.random()*7))
+    }
+    fallingBlock= new Block(Math.floor(Math.random()*7));
+    gameloop();
+}
+
 let fallingBlock= new Block(Math.floor(Math.random()*7));
-gameloop();
+startGame();
