@@ -1,3 +1,5 @@
+//TODO: add score, add restart button, fix game end so that when pieces r rlly high up the pieces auto generate to be higher, space to insta drop
+
 const canvas = document.getElementById('cvs')
 
 const dpr = Math.ceil(window.devicePixelRatio || 1);
@@ -28,6 +30,10 @@ let holdX=0;
 let holdY=0;
 let nextX=0;
 let nextY=0;
+let sboardX=0;
+let sboardY=0;
+let sboardWidth=0;
+let sboardHeight=0;
 
 const blockLayouts = [
     [[2,0],[2,1],[2,2],[2,3]], //line
@@ -57,7 +63,7 @@ const blockDims = [
     [3,3]
 ]
 
-let blockFallInteval = 60;
+let blockFallInterval = 60;
 let shiftInterval = 6;
 let fastFallInterval = 4; // must be a factor of blockFallInterval
 
@@ -68,6 +74,9 @@ let blocks = [];
 let next = [];
 let holdBlock = -1;
 
+let score = 0;
+let lines =0;
+let level = 1;
 let gameOver = false;
 let canHold = true;
 
@@ -76,6 +85,7 @@ let upArrow = false;
 let rightArrow= false;
 let leftArrow= false;
 let cKey = false;
+let spaceKey=false;
 let rotate = false;
 let oldRotate = false;
 let newLeft = false;
@@ -86,8 +96,13 @@ let oldRight= false;
 let oldDown= false;
 let hold = false;
 let oldHold = false;
+let oldDrop = false;
+let drop = false;
+let previousCount=0;
 
 function gameloop() {
+    level=1+Math.floor(lines/10);
+    blockFallInterval=Math.max(1,60-4*level);
     setDimensions();
 
     if (rotate){
@@ -113,6 +128,12 @@ function gameloop() {
         newDown=false;
         fallTimer=0;
     }
+    if (drop){
+        fallingBlock.drop()
+        drop=false;
+        fallTimer=1;
+        console.log("drop")
+    }
     if (newLeft || newRight){
         newLeft=false;
         newRight=false;
@@ -124,6 +145,7 @@ function gameloop() {
     oldRotate = upArrow;
     oldDown = downArrow;
     oldHold = cKey;
+    oldDrop=spaceKey;
 
     if (transformTimer % shiftInterval==0){
         shift=0;
@@ -134,11 +156,12 @@ function gameloop() {
     if (downArrow && fallTimer % fastFallInterval==0){
         if (fallingBlock.fall()) fallTimer=1;
     }
-    if (fallTimer % blockFallInteval==0) {
+
+    if (fallTimer % blockFallInterval==0) {
         if (!fallingBlock.fall()) fallingBlock.placeBlock();
     }
 
-    if (fallingBlock.atBottom()) fallingBlock.opacity=0.75+(Math.cos(fallTimer/blockFallInteval*2*Math.PI))/4
+    if (fallingBlock.atBottom()) fallingBlock.opacity=0.75+(Math.cos(fallTimer/blockFallInterval*2*Math.PI))/4
 
     drawFrame()
     fallTimer++;
@@ -168,6 +191,10 @@ function keyDown(event){
             if (!oldHold) hold=true;
             cKey=true;
             break;
+        case (' '):
+            if (!oldDrop) drop=true;
+            space=true;
+            break;
     }
 }
 
@@ -188,6 +215,9 @@ function keyUp(event){
         case ('c'):
             cKey=false;
             break;
+        case (' '):
+            spaceKey=false;
+            break;
     }
 }
 
@@ -207,6 +237,10 @@ function setDimensions() {
     holdY=screenY;
     nextX = screenX+margin+screenWidth;
     nextY = screenY;
+    sboardHeight=9*squareDim;
+    sboardWidth=holdWidth;
+    sboardX=holdX;
+    sboardY=screenY+screenHeight-sboardHeight;
 }
 
 function drawFrame() {
@@ -215,7 +249,18 @@ function drawFrame() {
     ctx.fillStyle='black';
     ctx.fillRect(holdX,holdY,holdWidth,holdHeight);
     ctx.fillRect(nextX,nextY,nextWidth,nextHeight);
+    ctx.fillRect(sboardX,sboardY,sboardWidth,sboardHeight);
     ctx.fillRect(screenX,screenY,screenWidth,screenHeight);
+    ctx.fillStyle='white';
+    ctx.font=String(Math.round(sboardHeight/10))+'px Arial';
+    ctx.textAlign = "center";
+    ctx.fillText("Score", sboardX+sboardWidth/2,sboardY+1*sboardHeight/6);
+    ctx.fillText(score, sboardX+sboardWidth/2,sboardY+1.8*sboardHeight/6);
+    ctx.fillText("Level", sboardX+sboardWidth/2,sboardY+2.8*sboardHeight/6);
+    ctx.fillText(level, sboardX+sboardWidth/2,sboardY+3.6*sboardHeight/6);
+    ctx.fillText("Lines", sboardX+sboardWidth/2,sboardY+4.6*sboardHeight/6);
+    ctx.fillText(lines, sboardX+sboardWidth/2,sboardY+5.4*sboardHeight/6);
+    console.log()
     for (let i=0;i<blocks.length;i++){
         blocks[i].drawBlock();
     }
@@ -256,7 +301,6 @@ function drawBlockCentered(id, rotation, x, y){
     }
     let centerx=(leftest+rightest+1)/2;
     let centery=(highest+lowest+1)/2;
-    console.log(lowest,highest,leftest,rightest,centerx,centery);
     for (let i=0; i<squares.length; i++){
         if (squares[i][1]>=0 && squares[i][1] < 20) drawSquare(blockColors[id], 1, x-centerx*squareDim, y-centery*squareDim, squares[i][0], squares[i][1]);
     }
@@ -287,6 +331,18 @@ function isRowComplete(row){
         if (!exists) return false;
     }
     return true;
+}
+
+function givePoints(rowsCleared){ // adds points and returns # of points added
+    newPoints=100*rowsCleared
+    if (rowsCleared==4){
+        newPoints+=400;
+        if (previousCount==4) newPoints+=400
+    } 
+    previousCount=rowsCleared;
+    newpoints*=level;
+    score+=newpoints;
+    return newPoints;
 }
 
 function getNext(){
@@ -321,7 +377,21 @@ class Block {
         }
     }
 
-    placeBlock(){
+    drop(){
+        while (!this.isOverlapping()){
+            this.y++;
+            for (let i=0;i<this.squares.length;i++){
+                this.squares[i][1]++;
+            }
+        }
+        this.y--;
+        for (let i=0;i<this.squares.length;i++){
+            this.squares[i][1]--;
+        }
+        this.placeBlock();
+    }
+
+    placeBlock(){ // returns the number of 
         this.opacity=1;
         blocks.push(this);
         canHold = true;
@@ -334,8 +404,11 @@ class Block {
             if (this.squares[i][1]>r2) r2=this.squares[i][1];
         }
 
+        let count=0;
         for (let i=r1;i<=r2;i++){
             if (isRowComplete(i)){
+                lines++;
+                count++;
                 for (let k=0;k<blocks.length;k++){
                     blocks[k].eliminateRow(i);
                 }
@@ -349,6 +422,8 @@ class Block {
         if (fallingBlock.isOverlapping()){
             gameOver=true;
         }
+        givePoints(count);
+        return count;
     }
 
     atBottom(){
