@@ -1,4 +1,4 @@
-//TODO: add score, add restart button, fix game end so that when pieces r rlly high up the pieces auto generate to be higher, space to insta drop
+//TODO: add move down way of getting score, add restart button, fix game end so that when pieces r rlly high up the pieces auto generate to be higher
 
 const canvas = document.getElementById('cvs')
 
@@ -65,7 +65,7 @@ const blockDims = [
 
 let blockFallInterval = 60;
 let shiftInterval = 6;
-let fastFallInterval = 4; // must be a factor of blockFallInterval
+let fastFallInterval = 3;
 
 let transformTimer=1;
 let fallTimer=1;
@@ -73,6 +73,7 @@ let fallTimer=1;
 let blocks = [];
 let next = [];
 let holdBlock = -1;
+let textEffects = [];
 
 let score = 0;
 let lines =0;
@@ -98,11 +99,12 @@ let hold = false;
 let oldHold = false;
 let oldDrop = false;
 let drop = false;
-let previousCount=0;
+let previousHard=false;
+let combo=0;
 
 function gameloop() {
     level=1+Math.floor(lines/10);
-    blockFallInterval=Math.max(1,60-4*level);
+    blockFallInterval=Math.max(1,60-5*level);
     setDimensions();
 
     if (rotate){
@@ -132,7 +134,6 @@ function gameloop() {
         fallingBlock.drop()
         drop=false;
         fallTimer=1;
-        console.log("drop")
     }
     if (newLeft || newRight){
         newLeft=false;
@@ -154,7 +155,10 @@ function gameloop() {
         fallingBlock.shiftHor(shift);
     }
     if (downArrow && fallTimer % fastFallInterval==0){
-        if (fallingBlock.fall()) fallTimer=1;
+        if (fallingBlock.fall()) {
+            score+=1
+            fallTimer=1;
+        }
     }
 
     if (fallTimer % blockFallInterval==0) {
@@ -162,6 +166,13 @@ function gameloop() {
     }
 
     if (fallingBlock.atBottom()) fallingBlock.opacity=0.75+(Math.cos(fallTimer/blockFallInterval*2*Math.PI))/4
+    else fallingBlock.opacity=1;
+
+    for (let i=textEffects.length-1; i>=0;i--){
+        if ((textEffects[i].update())<=0){
+            textEffects.splice(i,1)
+        }
+    }
 
     drawFrame()
     fallTimer++;
@@ -246,13 +257,15 @@ function setDimensions() {
 function drawFrame() {
     ctx.fillStyle='white';
     ctx.fillRect(0,0,canvas.width,canvas.height)
-    ctx.fillStyle='black';
+    ctx.fillStyle='rgb(50,50,50)';
     ctx.fillRect(holdX,holdY,holdWidth,holdHeight);
     ctx.fillRect(nextX,nextY,nextWidth,nextHeight);
+    ctx.fillStyle='black';
     ctx.fillRect(sboardX,sboardY,sboardWidth,sboardHeight);
     ctx.fillRect(screenX,screenY,screenWidth,screenHeight);
+    drawGrid();
     ctx.fillStyle='white';
-    ctx.font=String(Math.round(sboardHeight/10))+'px Arial';
+    ctx.font=String(Math.round(sboardHeight/10))+'px Berlin Sans FB';
     ctx.textAlign = "center";
     ctx.fillText("Score", sboardX+sboardWidth/2,sboardY+1*sboardHeight/6);
     ctx.fillText(score, sboardX+sboardWidth/2,sboardY+1.8*sboardHeight/6);
@@ -260,17 +273,37 @@ function drawFrame() {
     ctx.fillText(level, sboardX+sboardWidth/2,sboardY+3.6*sboardHeight/6);
     ctx.fillText("Lines", sboardX+sboardWidth/2,sboardY+4.6*sboardHeight/6);
     ctx.fillText(lines, sboardX+sboardWidth/2,sboardY+5.4*sboardHeight/6);
-    console.log()
     for (let i=0;i<blocks.length;i++){
         blocks[i].drawBlock();
     }
+    if (!gameOver) fallingBlock.drawBlock();
+
     drawNextPanel()
     if (holdBlock != -1){
         drawBlockCentered(holdBlock, 1, holdX + holdWidth/2, holdY+holdHeight/2)
     }
-    if (!gameOver) fallingBlock.drawBlock();
+
+    for (let i=0;i<textEffects.length; i++){
+        textEffects[i].draw();
+    }
 }
 
+function remove(list, element){
+    let i=list.indexOf(element);
+    if (i!=-1){
+        list.splice(i, 1)
+    }
+}
+function drawGrid(){
+    ctx.strokeStyle ='rgb(50,50,50)';
+    ctx.lineWidth = Math.round(squareDim/20)
+    for (let i=0;i<5;i++){
+        ctx.strokeRect(screenX+i*2*squareDim,screenY,squareDim,screenHeight)
+    }
+    for (let i=0;i<10;i++){
+        ctx.strokeRect(screenX,screenY+i*2*squareDim,screenWidth,squareDim)
+    }
+}
 function drawNextPanel(){
     for (let i=0;i<next.length;i++){
         drawBlockCentered(next[i], 1, nextX + nextWidth/2, nextY+holdHeight*(i+0.5))
@@ -310,9 +343,22 @@ function toOpacity(color,opacity){
     return 'rgba('+String(color[0])+','+String(color[1])+','+String(color[2])+','+String(opacity)+')';
 }
 
+function changeColor(color,dr,dg,db){
+    return [Math.min(255,Math.max(0,color[0]+dr)),Math.min(255,Math.max(0,color[1]+dg)),Math.min(255,Math.max(0,color[2]+db))]
+}
+
 function drawSquare(color,opacity,refx, refy, x,y){
+    wdth=Math.round(squareDim/40)*2;
     ctx.fillStyle=toOpacity(color,opacity);
-    ctx.fillRect(Math.floor(refx+x*squareDim),Math.floor(refy+y*squareDim),squareDim,squareDim);
+    //ctx.fillRect(Math.floor(refx+x*squareDim),Math.floor(refy+y*squareDim),squareDim,squareDim);
+    ctx.fillRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,squareDim-2*wdth)
+    ctx.fillStyle=toOpacity(changeColor(color,100,100,100),opacity);
+    ctx.fillRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,(squareDim-2*wdth)/3)
+    ctx.lineWidth=wdth
+    ctx.strokeStyle=toOpacity(changeColor(color,100,100,100),1)
+    ctx.strokeRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,squareDim-2*wdth);
+    ctx.strokeStyle=toOpacity(changeColor(color,-100,-100,-100),opacity)
+    ctx.strokeRect(Math.floor(refx+x*squareDim+2*wdth),Math.floor(refy+y*squareDim+2*wdth),squareDim-4*wdth,squareDim-4*wdth);
 }
 
 function isRowComplete(row){
@@ -334,15 +380,42 @@ function isRowComplete(row){
 }
 
 function givePoints(rowsCleared){ // adds points and returns # of points added
-    newPoints=100*rowsCleared
-    if (rowsCleared==4){
-        newPoints+=400;
-        if (previousCount==4) newPoints+=400
-    } 
-    previousCount=rowsCleared;
-    newpoints*=level;
-    score+=newpoints;
-    return newPoints;
+    if (rowsCleared>=1){
+        combo++;
+        let newPoints=50*(combo-1);
+        let maintxt="";
+        switch (rowsCleared) {
+            case 1:
+                maintxt="SINGLE";
+                newPoints+=100;
+                break;
+            case 2:
+                maintxt="DOUBLE";
+                newPoints+=300;
+                break;
+            case 3:
+                maintxt="TRIPLE";
+                newPoints+=500;
+                break;
+            case 4:
+                maintxt="TETRIS";
+                newPoints+=800;
+                if (previousHard) newPoints*=1.5;
+                previousHard=true;
+                break;
+        }
+        newPoints*=level;
+        score+=newPoints;
+        if (combo>=2){
+            textEffects.push(new TextEffect("COMBO " + String(combo-1),0.9*squareDim,screenX+screenWidth/2,screenY+3/4*screenHeight-squareDim,squareDim/6))
+        }
+        textEffects.push(new TextEffect(maintxt,0.9*squareDim,screenX+screenWidth/2,screenY+3/4*screenHeight,squareDim/6))
+        textEffects.push(new TextEffect("+" + String(newPoints),squareDim*2/3,screenX+screenWidth/2,screenY+3/4*screenHeight+0.8*squareDim,squareDim/6))
+        return newPoints;
+    }
+    combo=0
+    previousHard=false;
+    return 0;
 }
 
 function getNext(){
@@ -351,6 +424,31 @@ function getNext(){
     next[1]=next[2];
     next[2]=Math.floor(Math.random()*7);
     return save;
+}
+
+class TextEffect {
+    constructor(txt,size,x,y,spd){
+        this.text=txt;
+        this.x=x;
+        this.y=y;
+        this.speed=spd;
+        this.count=40;
+        this.size=size
+    }
+
+    update(){
+        this.y-=Math.round(this.speed);
+        this.speed*=0.95;
+        this.count-=1;
+        return this.count;
+    }
+
+    draw(){
+        ctx.fillStyle='white';
+        ctx.font=String(Math.round(this.size))+'px Berlin Sans FB';
+        ctx.textAlign = "center";
+        ctx.fillText(this.text, this.x,this.y);
+    }
 }
 
 class Block {
@@ -380,11 +478,13 @@ class Block {
     drop(){
         while (!this.isOverlapping()){
             this.y++;
+            score+=2
             for (let i=0;i<this.squares.length;i++){
                 this.squares[i][1]++;
             }
         }
         this.y--;
+        score-=2;
         for (let i=0;i<this.squares.length;i++){
             this.squares[i][1]--;
         }
@@ -409,7 +509,7 @@ class Block {
             if (isRowComplete(i)){
                 lines++;
                 count++;
-                for (let k=0;k<blocks.length;k++){
+                for (let k=blocks.length-1;k>=0;k--){
                     blocks[k].eliminateRow(i);
                 }
             }
@@ -513,12 +613,12 @@ class Block {
     }
 
     eliminateRow(row){
-        for (let i=0; i<this.squares.length; i++){
-            if (this.squares[i][1]==row) this.squares[i][1]=20; // temporary fix, does not actually remove square, only moves it away
+        for (let i=this.squares.length-1; i>=0; i--){
+            if (this.squares[i][1]==row) this.squares.splice(i,1);
             else if (this.squares[i][1]<row) this.squares[i][1]++;
         }
         if (this.squares.length==0) {
-            // remove block (this) from blocks array
+            remove(blocks,this)
         }
     }
 
