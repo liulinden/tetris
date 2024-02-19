@@ -1,4 +1,4 @@
-//TODO: add move down way of getting score, add restart button, fix game end so that when pieces r rlly high up the pieces auto generate to be higher, lockdelay
+//TODO: add restart button, fix game end so that when pieces r rlly high up the pieces auto generate to be higher, add better left/right key with initial delay, add animation for instant drop
 
 const canvas = document.getElementById('cvs')
 
@@ -173,7 +173,6 @@ function gameloop() {
     if (fallTimer % blockFallInterval==0) {
         fallingBlock.fall()
     }
-    console.log(moved)
     if (fallingBlock.atBottom()) {
         if (moved && lockResetCounter<lockResetCap){
             lockDelayTimer=0;
