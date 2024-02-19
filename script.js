@@ -84,6 +84,7 @@ let lockDelayTimer = 0;
 let lockResetCounter = 0;
 const lockDelayTime = 30; // half a second
 const lockResetCap = 15;
+let disappearingTimer = 0;
 
 let downArrow = false;
 let upArrow = false;
@@ -111,84 +112,92 @@ function gameloop() {
     blockFallInterval=Math.max(1,60-5*level);
     setDimensions();
 
-    let moved=false;
+    if (disappearingTimer>0){
+        disappearingTimer--;
+    } else {
 
-    if (rotate){
-        if (fallingBlock.rotateClockwise()) moved=true;
-        rotate=false;
-    }
-    if (hold){
-        if (canHold){
-            if (holdBlock==-1) {
-                holdBlock = fallingBlock.id;
-                fallingBlock = new Block(getNext())
-            } 
-            else {
-                let id = holdBlock;
-                holdBlock = fallingBlock.id;
-                fallingBlock = new Block(id);
+
+        let moved=false;
+
+        if (rotate){
+            if (fallingBlock.rotateClockwise()) moved=true;
+            rotate=false;
+        }
+        if (hold){
+            if (canHold){
+                if (holdBlock==-1) {
+                    holdBlock = fallingBlock.id;
+                    fallingBlock = new Block(getNext())
+                } 
+                else {
+                    let id = holdBlock;
+                    holdBlock = fallingBlock.id;
+                    fallingBlock = new Block(id);
+                }
+                canHold = false
+                lockDelayTimer=0;
+                lockResetCounter=0;
             }
-            canHold = false
-            lockDelayTimer=0;
-            lockResetCounter=0;
+            hold=false;
         }
-        hold=false;
-    }
-    if (newDown){
-        newDown=false;
-        fallTimer=0;
-    }
-    if (drop){
-        fallingBlock.drop()
-        drop=false;
-        fallTimer=1;
-    }
-    if (newLeft || newRight){
-        newLeft=false;
-        newRight=false;
-        transformTimer=0;
-    }
-
-    oldLeft=leftArrow;
-    oldRight=rightArrow;
-    oldRotate = upArrow;
-    oldDown = downArrow;
-    oldHold = cKey;
-    oldDrop=spaceKey;
-
-    if (transformTimer % shiftInterval==0){
-        shift=0;
-        if (leftArrow) shift-=1;
-        if (rightArrow) shift+=1;
-        if (shift!=0 && fallingBlock.shiftHor(shift)) moved=true;
-    }
-    if (downArrow && fallTimer % fastFallInterval==0){
-        if (fallingBlock.fall()) {
-            score+=1
+        if (newDown){
+            newDown=false;
+            fallTimer=0;
+        }
+        if (drop){
+            fallingBlock.drop()
+            drop=false;
             fallTimer=1;
-            moved=true;
         }
-    }
+        if (newLeft || newRight){
+            newLeft=false;
+            newRight=false;
+            transformTimer=0;
+        }
 
-    if (fallTimer % blockFallInterval==0) {
-        fallingBlock.fall()
-    }
-    if (fallingBlock.atBottom()) {
-        if (moved && lockResetCounter<lockResetCap){
-            lockDelayTimer=0;
-            lockResetCounter++;
+        oldLeft=leftArrow;
+        oldRight=rightArrow;
+        oldRotate = upArrow;
+        oldDown = downArrow;
+        oldHold = cKey;
+        oldDrop=spaceKey;
+
+        if (transformTimer % shiftInterval==0){
+            shift=0;
+            if (leftArrow) shift-=1;
+            if (rightArrow) shift+=1;
+            if (shift!=0 && fallingBlock.shiftHor(shift)) moved=true;
         }
-        fallingBlock.opacity=0.75+(Math.cos(fallTimer/6))/4
-        lockDelayTimer++;
-        if (lockDelayTimer>lockDelayTime){
-            fallingBlock.placeBlock();
-            lockDelayTimer=0;
-            lockResetCounter=0;
+        if (downArrow && fallTimer % fastFallInterval==0){
+            if (fallingBlock.fall()) {
+                score+=1
+                fallTimer=1;
+                moved=true;
+            }
         }
-    }
-    else {
-        fallingBlock.opacity=1;
-        if (lockResetCounter<lockResetCap) lockDelayTimer=0;
+
+        if (fallTimer % blockFallInterval==0) {
+            fallingBlock.fall()
+        }
+        if (fallingBlock.atBottom()) {
+            if (moved && lockResetCounter<lockResetCap){
+                lockDelayTimer=0;
+                lockResetCounter++;
+            }
+            fallingBlock.opacity=0.75+(Math.cos(fallTimer/6))/4
+            lockDelayTimer++;
+            if (lockDelayTimer>lockDelayTime){
+                fallingBlock.placeBlock();
+                lockDelayTimer=0;
+                lockResetCounter=0;
+            }
+        }
+        else {
+            fallingBlock.opacity=1;
+            if (lockResetCounter<lockResetCap) lockDelayTimer=0;
+        }
+        fallTimer++;
+        transformTimer++;
     }
 
     for (let i=textEffects.length-1; i>=0;i--){
@@ -197,9 +206,9 @@ function gameloop() {
         }
     }
 
+    
+
     drawFrame()
-    fallTimer++;
-    transformTimer++;
     if (!gameOver) requestAnimationFrame(gameloop); else console.log("gameover");
 }
 
@@ -314,7 +323,7 @@ function drawFrame() {
     for (let i=0;i<blocks.length;i++){
         blocks[i].drawBlock();
     }
-    if (!gameOver) fallingBlock.drawBlock();
+    if (!gameOver && disappearingTimer==0) fallingBlock.drawBlock();
 
     for (let i=0;i<next.length;i++){
         drawBlockCentered(next[i], 1, nextX + nextWidth/2, nextY+1.1*holdHeight*3/10+squareDim*3*(i+0.5))
@@ -506,8 +515,13 @@ class Block {
         this.y=0;
         this.x=5-Math.ceil(blockDims[this.id][0]/2);
         this.squares=structuredClone(blockLayouts[this.id]);
+        this.squareOffsets=[0,0,0,0];
+        this.disappearing=[false,false,false,false]
+        this.placed=false;
         this.color=blockColors[this.id];
         this.opacity=1;
+        this.trailLength=0;
+        this.ghost=false;
 
         for (let i=0; i<this.squares.length; i++){
             this.squares[i][1]=this.y+blockLayouts[this.id][i][1];
@@ -517,13 +531,42 @@ class Block {
     }
 
     drawBlock(){
-        for (let i=0; i<this.squares.length; i++){
-            if (this.squares[i][1]>=0 && this.squares[i][1] < 20) drawSquare(this.color, this.opacity, screenX, screenY, this.squares[i][0], this.squares[i][1], 0, 0);
+        if (this.trailLength>0){
+            this.trailLength=Math.floor(this.trailLength*0.7);
+            let startxs=[];
+            let startys=[]
+            for (let i=0; i<this.squares.length; i++){
+                let index=startxs.indexOf(this.squares[i][0])
+                if (index!=-1){
+                    if (this.squares[i][1] < startys[index]) startys[index]=this.squares[i][1];
+                } else {
+                    startxs.push(this.squares[i][0])
+                    startys.push(this.squares[i][1])
+                }
+            }
+            console.log(startxs)
+            ctx.fillStyle=toOpacity(this.color,0.2)
+            for (let i=0;i<startxs.length;i++){
+                ctx.fillRect(screenX+startxs[i]*squareDim,screenY+squareDim*(startys[i]-this.trailLength),squareDim,this.trailLength*squareDim);
+            }
+        }
+        for (let i=this.squares.length-1; i>=0; i--){
+            if (this.squares[i][1]>=0 && this.squares[i][1] < 20) drawSquare(this.color, this.opacity, screenX, screenY+this.squareOffsets[i], this.squares[i][0], this.squares[i][1], 0, 0);
+            if (disappearingTimer==0 && this.squareOffsets[i]<0){
+                this.squareOffsets[i]+=squareDim/2;
+                if (this.squareOffsets[i]>0) this.squareOffsets[i]=0;
+            }
+            if (this.disappearing[i] && (9-(disappearingTimer/2)==this.squares[i][0])){
+                this.squares.splice(i,1);
+                this.squareOffsets.splice(i,1);
+                this.disappearing.splice(i,1);
+            }
         }
     }
 
     drop(){
         while (!this.isOverlapping()){
+            this.trailLength++;
             this.y++;
             score+=2
             for (let i=0;i<this.squares.length;i++){
@@ -531,6 +574,7 @@ class Block {
             }
         }
         this.y--;
+        this.trailLength--;
         score-=2;
         for (let i=0;i<this.squares.length;i++){
             this.squares[i][1]--;
@@ -538,8 +582,9 @@ class Block {
         this.placeBlock();
     }
 
-    placeBlock(){ // returns the number of 
+    placeBlock(){ // returns the number of lines removed
         this.opacity=1;
+        this.placed=true;
         blocks.push(this);
         canHold = true;
         lockDelayTimer=0;
@@ -570,6 +615,9 @@ class Block {
         fallingBlock= new Block(getNext());
         if (fallingBlock.isOverlapping()){
             gameOver=true;
+        }
+        if (count>=1){
+            disappearingTimer=20;
         }
         givePoints(count);
         return count;
@@ -663,8 +711,15 @@ class Block {
 
     eliminateRow(row){
         for (let i=this.squares.length-1; i>=0; i--){
-            if (this.squares[i][1]==row) this.squares.splice(i,1);
-            else if (this.squares[i][1]<row) this.squares[i][1]++;
+            if (this.squares[i][1]==row){
+                this.disappearing[i]=true;
+                //this.squares.splice(i,1);
+                //this.squareOffsets.splice(i,1)
+            }
+            else if (this.squares[i][1]<row) {
+                this.squares[i][1]++;
+                this.squareOffsets[i]-=squareDim;
+            }
         }
         if (this.squares.length==0) {
             remove(blocks,this)
