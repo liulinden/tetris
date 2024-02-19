@@ -1,4 +1,4 @@
-//TODO: add move down way of getting score, add restart button, fix game end so that when pieces r rlly high up the pieces auto generate to be higher
+//TODO: add move down way of getting score, add restart button, fix game end so that when pieces r rlly high up the pieces auto generate to be higher, lockdelay
 
 const canvas = document.getElementById('cvs')
 
@@ -45,13 +45,13 @@ const blockLayouts = [
     [[2,0],[1,1],[2,1],[1,2]]
 ];
 const blockColors = [
-    [0,255,255],
-    [0,0,255],
-    [255,122,0],
-    [255,255,0],
-    [0,255,0],
-    [255,0,255],
-    [255,0,0]
+    [30,220,220],
+    [30,30,220],
+    [220,110,30],
+    [220,220,30],
+    [30,220,30],
+    [220,30,220],
+    [220,30,30]
 ];
 const blockDims = [
     [4,4],
@@ -80,6 +80,10 @@ let lines =0;
 let level = 1;
 let gameOver = false;
 let canHold = true;
+let lockDelayTimer = 0;
+let lockResetCounter = 0;
+const lockDelayTime = 30; // half a second
+const lockResetCap = 15;
 
 let downArrow = false;
 let upArrow = false;
@@ -107,8 +111,10 @@ function gameloop() {
     blockFallInterval=Math.max(1,60-5*level);
     setDimensions();
 
+    let moved=false;
+
     if (rotate){
-        fallingBlock.rotateClockwise();
+        if (fallingBlock.rotateClockwise()) moved=true;
         rotate=false;
     }
     if (hold){
@@ -123,6 +129,8 @@ function gameloop() {
                 fallingBlock = new Block(id);
             }
             canHold = false
+            lockDelayTimer=0;
+            lockResetCounter=0;
         }
         hold=false;
     }
@@ -152,21 +160,37 @@ function gameloop() {
         shift=0;
         if (leftArrow) shift-=1;
         if (rightArrow) shift+=1;
-        fallingBlock.shiftHor(shift);
+        if (shift!=0 && fallingBlock.shiftHor(shift)) moved=true;
     }
     if (downArrow && fallTimer % fastFallInterval==0){
         if (fallingBlock.fall()) {
             score+=1
             fallTimer=1;
+            moved=true;
         }
     }
 
     if (fallTimer % blockFallInterval==0) {
-        if (!fallingBlock.fall()) fallingBlock.placeBlock();
+        fallingBlock.fall()
     }
-
-    if (fallingBlock.atBottom()) fallingBlock.opacity=0.75+(Math.cos(fallTimer/blockFallInterval*2*Math.PI))/4
-    else fallingBlock.opacity=1;
+    console.log(moved)
+    if (fallingBlock.atBottom()) {
+        if (moved && lockResetCounter<lockResetCap){
+            lockDelayTimer=0;
+            lockResetCounter++;
+        }
+        fallingBlock.opacity=0.75+(Math.cos(fallTimer/6))/4
+        lockDelayTimer++;
+        if (lockDelayTimer>lockDelayTime){
+            fallingBlock.placeBlock();
+            lockDelayTimer=0;
+            lockResetCounter=0;
+        }
+    }
+    else {
+        fallingBlock.opacity=1;
+        if (lockResetCounter<lockResetCap) lockDelayTimer=0;
+    }
 
     for (let i=textEffects.length-1; i>=0;i--){
         if ((textEffects[i].update())<=0){
@@ -235,13 +259,13 @@ function keyUp(event){
 function setDimensions() {
     canvas.width=canvas.clientWidth*dpr;
     canvas.height=canvas.clientHeight*dpr;
-    squareDim=Math.floor(Math.min((canvas.height-2*margin)/20, (canvas.width-4*margin)/20))
+    squareDim=Math.floor(Math.min((canvas.height-2*margin)/20, (canvas.width-4*margin)/22))
     screenHeight=20*squareDim;
     screenWidth=10*squareDim;
-    holdWidth = 5 * squareDim;
-    holdHeight = 3 * squareDim;
+    holdWidth = 6 * squareDim;
+    holdHeight = 5 * squareDim;
     nextWidth = holdWidth;
-    nextHeight = 3 * holdHeight;
+    nextHeight = 11 * squareDim;
     screenX=canvas.width/2-5*squareDim;
     screenY=margin;
     holdX = screenX-margin-holdWidth;
@@ -255,32 +279,50 @@ function setDimensions() {
 }
 
 function drawFrame() {
-    ctx.fillStyle='white';
+    ctx.fillStyle='black';
     ctx.fillRect(0,0,canvas.width,canvas.height)
+    
+    ctx.strokeStyle='white';
     ctx.fillStyle='rgb(50,50,50)';
+    ctx.lineWidth=squareDim/6;
+    ctx.strokeRect(holdX,holdY,holdWidth,holdHeight);
+    ctx.strokeRect(nextX,nextY,nextWidth,nextHeight);
+    ctx.strokeRect(sboardX,sboardY,sboardWidth,sboardHeight);
+    ctx.strokeRect(screenX,screenY,screenWidth,screenHeight);
     ctx.fillRect(holdX,holdY,holdWidth,holdHeight);
     ctx.fillRect(nextX,nextY,nextWidth,nextHeight);
-    ctx.fillStyle='black';
     ctx.fillRect(sboardX,sboardY,sboardWidth,sboardHeight);
+    ctx.fillStyle='black'
     ctx.fillRect(screenX,screenY,screenWidth,screenHeight);
+    ctx.fillRect(holdX+holdWidth/12,holdY+1.1*holdHeight*3/10, sboardWidth*5/6,squareDim*3)
+    ctx.fillRect(nextX+holdWidth/12,nextY+1.1*nextHeight*3/22, nextWidth*5/6,squareDim*9)
+    ctx.fillRect(sboardX+sboardWidth/12,sboardY+1.2*sboardHeight/6,sboardWidth*5/6,squareDim*1.2)
+    ctx.fillRect(sboardX+sboardWidth/12,sboardY+3*sboardHeight/6,sboardWidth*5/6,squareDim*1.2)
+    ctx.fillRect(sboardX+sboardWidth/12,sboardY+4.8*sboardHeight/6,sboardWidth*5/6,squareDim*1.2)
     drawGrid();
     ctx.fillStyle='white';
     ctx.font=String(Math.round(sboardHeight/10))+'px Berlin Sans FB';
     ctx.textAlign = "center";
-    ctx.fillText("Score", sboardX+sboardWidth/2,sboardY+1*sboardHeight/6);
-    ctx.fillText(score, sboardX+sboardWidth/2,sboardY+1.8*sboardHeight/6);
-    ctx.fillText("Level", sboardX+sboardWidth/2,sboardY+2.8*sboardHeight/6);
-    ctx.fillText(level, sboardX+sboardWidth/2,sboardY+3.6*sboardHeight/6);
-    ctx.fillText("Lines", sboardX+sboardWidth/2,sboardY+4.6*sboardHeight/6);
-    ctx.fillText(lines, sboardX+sboardWidth/2,sboardY+5.4*sboardHeight/6);
+    ctx.fillText("HOLD", holdX+holdWidth/2,holdY+0.81*holdHeight*3/10);
+    ctx.fillText("NEXT", nextX+nextWidth/2,nextY+0.81*nextHeight*3/22);
+    ctx.fillText("SCORE", sboardX+sboardWidth/2,sboardY+0.95*sboardHeight/6);
+    ctx.fillText(score, sboardX+sboardWidth/2,sboardY+1.75*sboardHeight/6);
+    ctx.fillText("LEVEL", sboardX+sboardWidth/2,sboardY+2.75*sboardHeight/6);
+    ctx.fillText(level, sboardX+sboardWidth/2,sboardY+3.55*sboardHeight/6);
+    ctx.fillText("LINES", sboardX+sboardWidth/2,sboardY+4.55*sboardHeight/6);
+    ctx.fillText(lines, sboardX+sboardWidth/2,sboardY+5.35*sboardHeight/6);
+
     for (let i=0;i<blocks.length;i++){
         blocks[i].drawBlock();
     }
     if (!gameOver) fallingBlock.drawBlock();
 
-    drawNextPanel()
+    for (let i=0;i<next.length;i++){
+        drawBlockCentered(next[i], 1, nextX + nextWidth/2, nextY+1.1*holdHeight*3/10+squareDim*3*(i+0.5))
+    }
+
     if (holdBlock != -1){
-        drawBlockCentered(holdBlock, 1, holdX + holdWidth/2, holdY+holdHeight/2)
+        drawBlockCentered(holdBlock, 1, holdX + holdWidth/2, holdY+1.1*holdHeight*3/10+1.5*squareDim)
     }
 
     for (let i=0;i<textEffects.length; i++){
@@ -298,16 +340,12 @@ function drawGrid(){
     ctx.strokeStyle ='rgb(50,50,50)';
     ctx.lineWidth = Math.round(squareDim/20)
     for (let i=0;i<5;i++){
-        ctx.strokeRect(screenX+i*2*squareDim,screenY,squareDim,screenHeight)
+        ctx.strokeRect(screenX+i*screenWidth/5,screenY,squareDim,screenHeight)
     }
     for (let i=0;i<10;i++){
-        ctx.strokeRect(screenX,screenY+i*2*squareDim,screenWidth,squareDim)
+        ctx.strokeRect(screenX,screenY+i*screenHeight/10,screenWidth,squareDim)
     }
-}
-function drawNextPanel(){
-    for (let i=0;i<next.length;i++){
-        drawBlockCentered(next[i], 1, nextX + nextWidth/2, nextY+holdHeight*(i+0.5))
-    }
+    ctx.strokeRect(screenX,screenY,screenWidth,screenHeight)
 }
 
 function drawBlockCentered(id, rotation, x, y){
@@ -352,10 +390,10 @@ function drawSquare(color,opacity,refx, refy, x,y){
     ctx.fillStyle=toOpacity(color,opacity);
     //ctx.fillRect(Math.floor(refx+x*squareDim),Math.floor(refy+y*squareDim),squareDim,squareDim);
     ctx.fillRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,squareDim-2*wdth)
-    ctx.fillStyle=toOpacity(changeColor(color,100,100,100),opacity);
+    ctx.fillStyle=toOpacity(changeColor(color,50,50,50),opacity);
     ctx.fillRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,(squareDim-2*wdth)/3)
     ctx.lineWidth=wdth
-    ctx.strokeStyle=toOpacity(changeColor(color,100,100,100),1)
+    ctx.strokeStyle=toOpacity(changeColor(color,50,50,50),1)
     ctx.strokeRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,squareDim-2*wdth);
     ctx.strokeStyle=toOpacity(changeColor(color,-100,-100,-100),opacity)
     ctx.strokeRect(Math.floor(refx+x*squareDim+2*wdth),Math.floor(refy+y*squareDim+2*wdth),squareDim-4*wdth,squareDim-4*wdth);
@@ -384,6 +422,7 @@ function givePoints(rowsCleared){ // adds points and returns # of points added
         combo++;
         let newPoints=50*(combo-1);
         let maintxt="";
+        let backToBack = false;
         switch (rowsCleared) {
             case 1:
                 maintxt="SINGLE";
@@ -400,12 +439,20 @@ function givePoints(rowsCleared){ // adds points and returns # of points added
             case 4:
                 maintxt="TETRIS";
                 newPoints+=800;
-                if (previousHard) newPoints*=1.5;
+                if (previousHard) {
+                    newPoints*=1.5;
+                    backToBack=true;
+                }
                 previousHard=true;
                 break;
         }
         newPoints*=level;
         score+=newPoints;
+
+        if (backToBack){
+            textEffects.push(new TextEffect("BACK-TO-BACK",0.9*squareDim,screenX+screenWidth/2,screenY+3/4*screenHeight-2*squareDim,squareDim/6))
+        }
+
         if (combo>=2){
             textEffects.push(new TextEffect("COMBO " + String(combo-1),0.9*squareDim,screenX+screenWidth/2,screenY+3/4*screenHeight-squareDim,squareDim/6))
         }
@@ -432,7 +479,7 @@ class TextEffect {
         this.x=x;
         this.y=y;
         this.speed=spd;
-        this.count=40;
+        this.count=60;
         this.size=size
     }
 
@@ -467,6 +514,7 @@ class Block {
             this.squares[i][1]=this.y+blockLayouts[this.id][i][1];
             this.squares[i][0]=this.x+blockLayouts[this.id][i][0];
         }
+        this.rotateCounterclockwise(); 
     }
 
     drawBlock(){
@@ -495,6 +543,8 @@ class Block {
         this.opacity=1;
         blocks.push(this);
         canHold = true;
+        lockDelayTimer=0;
+        lockResetCounter=0;
         fallTimer=1;
 
         let r1=this.squares[0][1];
@@ -653,7 +703,9 @@ class Block {
             if (this.shiftHor(-2)) return true;
             if (this.shiftVert(-1)) return true;
             this.rotateCounterclockwise();
+            return false;
         }
+        return true;
     }
 }
 
