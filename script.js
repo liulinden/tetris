@@ -36,13 +36,13 @@ let sboardWidth=0;
 let sboardHeight=0;
 
 const blockLayouts = [
-    [[2,0],[2,1],[2,2],[2,3]], //line
-    [[1,0],[2,0],[1,1],[1,2]],
-    [[1,0],[1,1],[1,2],[2,2]],
+    [[0,1],[1,1],[2,1],[3,1]], //line
+    [[0,0],[0,1],[1,1],[2,1]], //flipped L
+    [[0,1],[1,1],[2,1],[2,0]], //L
     [[0,0],[1,0],[1,1],[0,1]], //square
-    [[1,0],[1,1],[2,1],[2,2]],
-    [[1,0],[1,1],[2,1],[1,2]],
-    [[2,0],[1,1],[2,1],[1,2]]
+    [[1,0],[2,0],[0,1],[1,1]], //S
+    [[1,0],[0,1],[1,1],[2,1]], //T
+    [[0,0],[1,0],[1,1],[2,1]] //flipped S
 ];
 const blockColors = [
     [30,220,220],
@@ -84,6 +84,7 @@ let lockDelayTimer = 0;
 let lockResetCounter = 0;
 const lockDelayTime = 30; // half a second
 const lockResetCap = 15;
+let disappearingTimer = 0;
 
 let downArrow = false;
 let upArrow = false;
@@ -111,84 +112,91 @@ function gameloop() {
     blockFallInterval=Math.max(1,60-5*level);
     setDimensions();
 
-    let moved=false;
+    if (disappearingTimer>0){
+        disappearingTimer--;
+    } else {
 
-    if (rotate){
-        if (fallingBlock.rotateClockwise()) moved=true;
-        rotate=false;
-    }
-    if (hold){
-        if (canHold){
-            if (holdBlock==-1) {
-                holdBlock = fallingBlock.id;
-                fallingBlock = new Block(getNext())
-            } 
-            else {
-                let id = holdBlock;
-                holdBlock = fallingBlock.id;
-                fallingBlock = new Block(id);
+        let moved=false;
+
+        if (rotate){
+            if (fallingBlock.rotateClockwise()) moved=true;
+            rotate=false;
+        }
+        if (hold){
+            if (canHold){
+                if (holdBlock==-1) {
+                    holdBlock = fallingBlock.id;
+                    fallingBlock = new Block(getNext())
+                } 
+                else {
+                    let id = holdBlock;
+                    holdBlock = fallingBlock.id;
+                    fallingBlock = new Block(id);
+                }
+                canHold = false
+                lockDelayTimer=0;
+                lockResetCounter=0;
             }
-            canHold = false
-            lockDelayTimer=0;
-            lockResetCounter=0;
+            hold=false;
         }
-        hold=false;
-    }
-    if (newDown){
-        newDown=false;
-        fallTimer=0;
-    }
-    if (drop){
-        fallingBlock.drop()
-        drop=false;
-        fallTimer=1;
-    }
-    if (newLeft || newRight){
-        newLeft=false;
-        newRight=false;
-        transformTimer=0;
-    }
-
-    oldLeft=leftArrow;
-    oldRight=rightArrow;
-    oldRotate = upArrow;
-    oldDown = downArrow;
-    oldHold = cKey;
-    oldDrop=spaceKey;
-
-    if (transformTimer % shiftInterval==0){
-        shift=0;
-        if (leftArrow) shift-=1;
-        if (rightArrow) shift+=1;
-        if (shift!=0 && fallingBlock.shiftHor(shift)) moved=true;
-    }
-    if (downArrow && fallTimer % fastFallInterval==0){
-        if (fallingBlock.fall()) {
-            score+=1
+        if (newDown){
+            newDown=false;
+            fallTimer=0;
+        }
+        if (drop){
+            fallingBlock.drop()
+            drop=false;
             fallTimer=1;
-            moved=true;
         }
-    }
+        if (newLeft || newRight){
+            newLeft=false;
+            newRight=false;
+            transformTimer=0;
+        }
 
-    if (fallTimer % blockFallInterval==0) {
-        fallingBlock.fall()
-    }
-    if (fallingBlock.atBottom()) {
-        if (moved && lockResetCounter<lockResetCap){
-            lockDelayTimer=0;
-            lockResetCounter++;
+        oldLeft=leftArrow;
+        oldRight=rightArrow;
+        oldRotate = upArrow;
+        oldDown = downArrow;
+        oldHold = cKey;
+        oldDrop=spaceKey;
+
+        if (transformTimer % shiftInterval==0){
+            shift=0;
+            if (leftArrow) shift-=1;
+            if (rightArrow) shift+=1;
+            if (shift!=0 && fallingBlock.shiftHor(shift)) moved=true;
         }
-        fallingBlock.opacity=0.75+(Math.cos(fallTimer/6))/4
-        lockDelayTimer++;
-        if (lockDelayTimer>lockDelayTime){
-            fallingBlock.placeBlock();
-            lockDelayTimer=0;
-            lockResetCounter=0;
+        if (downArrow && fallTimer % fastFallInterval==0){
+            if (fallingBlock.fall()) {
+                score+=1
+                fallTimer=1;
+                moved=true;
+            }
         }
-    }
-    else {
-        fallingBlock.opacity=1;
-        if (lockResetCounter<lockResetCap) lockDelayTimer=0;
+
+        if (fallTimer % blockFallInterval==0) {
+            fallingBlock.fall()
+        }
+        if (fallingBlock.atBottom()) {
+            if (moved && lockResetCounter<lockResetCap){
+                lockDelayTimer=0;
+                lockResetCounter++;
+            }
+            fallingBlock.opacity=0.75+(Math.cos(fallTimer/6))/4
+            lockDelayTimer++;
+            if (lockDelayTimer>lockDelayTime){
+                fallingBlock.placeBlock();
+                lockDelayTimer=0;
+                lockResetCounter=0;
+            }
+        }
+        else {
+            fallingBlock.opacity=1;
+            if (lockResetCounter<lockResetCap) lockDelayTimer=0;
+        }
+        fallTimer++;
+        transformTimer++;
     }
 
     for (let i=textEffects.length-1; i>=0;i--){
@@ -197,38 +205,60 @@ function gameloop() {
         }
     }
 
+    
+
     drawFrame()
-    fallTimer++;
-    transformTimer++;
-    if (!gameOver) requestAnimationFrame(gameloop); else console.log("gameover");
+    if (!gameOver) requestAnimationFrame(gameloop); 
+    else {
+        textEffects.push(new TextEffect("GAME OVER",squareDim*1.5,screenX+screenWidth/2,screenY+screenHeight*0.95,squareDim*0.67))
+        textEffects.push(new TextEffect("space to play again",squareDim*0.8,screenX+screenWidth/2,screenY+screenHeight,squareDim*0.67))
+        requestAnimationFrame(gameOverScreen)
+    }
+}
+
+function gameOverScreen(){
+    for (let i=textEffects.length-1; i>=0;i--){
+        textEffects[i].update();
+    }
+    drawFrame()
+    if (gameOver) requestAnimationFrame(gameOverScreen);
 }
 
 function keyDown(event){
-    switch (event.key) {
-        case ('ArrowDown'):
-            if (!oldDown) newDown=true;
-            downArrow=true;
-            break;
-        case ('ArrowLeft'):
-            if (!oldLeft) newLeft=true;
-            leftArrow=true;
-            break;
-        case ('ArrowRight'):
-            if (!oldRight) newRight=true;
-            rightArrow=true;
-            break;
-        case ('ArrowUp'):
-            if (!oldRotate) rotate=true;
-            upArrow=true;
-            break;
-        case ('c'):
-            if (!oldHold) hold=true;
-            cKey=true;
-            break;
-        case (' '):
-            if (!oldDrop) drop=true;
-            space=true;
-            break;
+    if (gameOver) {
+        if (event.key==" ")
+        {
+            resetGame();
+            startGame();
+        }
+    }
+    else{
+        switch (event.key) {
+            case ('ArrowDown'):
+                if (!oldDown) newDown=true;
+                downArrow=true;
+                break;
+            case ('ArrowLeft'):
+                if (!oldLeft) newLeft=true;
+                leftArrow=true;
+                break;
+            case ('ArrowRight'):
+                if (!oldRight) newRight=true;
+                rightArrow=true;
+                break;
+            case ('ArrowUp'):
+                if (!oldRotate) rotate=true;
+                upArrow=true;
+                break;
+            case ('c'):
+                if (!oldHold) hold=true;
+                cKey=true;
+                break;
+            case (' '):
+                if (!oldDrop) drop=true;
+                spaceKey=true;
+                break;
+        }
     }
 }
 
@@ -253,6 +283,29 @@ function keyUp(event){
             spaceKey=false;
             break;
     }
+}
+
+function resetGame() {
+    blockFallInterval = 60;
+    shiftInterval = 6;
+    fastFallInterval = 3;
+
+    transformTimer=1;
+    fallTimer=1;
+
+    blocks = [];
+    next = [];
+    holdBlock = -1;
+    textEffects = [];
+
+    score = 0;
+    lines =0;
+    level = 1;
+    gameOver = false;
+    canHold = true;
+    lockDelayTimer = 0;
+    lockResetCounter = 0;
+    disappearingTimer = 0;
 }
 
 function setDimensions() {
@@ -314,14 +367,14 @@ function drawFrame() {
     for (let i=0;i<blocks.length;i++){
         blocks[i].drawBlock();
     }
-    if (!gameOver) fallingBlock.drawBlock();
+    if (disappearingTimer==0) fallingBlock.drawBlock();
 
     for (let i=0;i<next.length;i++){
-        drawBlockCentered(next[i], 1, nextX + nextWidth/2, nextY+1.1*holdHeight*3/10+squareDim*3*(i+0.5))
+        drawBlockCentered(next[i], 0, nextX + nextWidth/2, nextY+1.1*holdHeight*3/10+squareDim*3*(i+0.5))
     }
 
     if (holdBlock != -1){
-        drawBlockCentered(holdBlock, 1, holdX + holdWidth/2, holdY+1.1*holdHeight*3/10+1.5*squareDim)
+        drawBlockCentered(holdBlock, 0, holdX + holdWidth/2, holdY+1.1*holdHeight*3/10+1.5*squareDim)
     }
 
     for (let i=0;i<textEffects.length; i++){
@@ -506,31 +559,73 @@ class Block {
         this.y=0;
         this.x=5-Math.ceil(blockDims[this.id][0]/2);
         this.squares=structuredClone(blockLayouts[this.id]);
+        this.squareOffsets=[0,0,0,0];
+        this.disappearing=[false,false,false,false]
+        this.placed=false;
         this.color=blockColors[this.id];
         this.opacity=1;
+        this.trailLength=0;
+        this.ghost=false;
 
         for (let i=0; i<this.squares.length; i++){
             this.squares[i][1]=this.y+blockLayouts[this.id][i][1];
             this.squares[i][0]=this.x+blockLayouts[this.id][i][0];
         }
-        this.rotateCounterclockwise(); 
+        //move up as much as possible
+        if (this.isOverlapping()){
+            this.y-=1;
+        }
+        for (let i=0; i<this.squares.length; i++){
+            this.squares[i][1]=this.y+blockLayouts[this.id][i][1];
+            this.squares[i][0]=this.x+blockLayouts[this.id][i][0];
+        }
     }
 
     drawBlock(){
-        for (let i=0; i<this.squares.length; i++){
-            if (this.squares[i][1]>=0 && this.squares[i][1] < 20) drawSquare(this.color, this.opacity, screenX, screenY, this.squares[i][0], this.squares[i][1], 0, 0);
+        if (this.trailLength>0){
+            this.trailLength=Math.floor(this.trailLength*0.7);
+            let startxs=[];
+            let startys=[]
+            for (let i=0; i<this.squares.length; i++){
+                let index=startxs.indexOf(this.squares[i][0])
+                if (index!=-1){
+                    if (this.squares[i][1] < startys[index]) startys[index]=this.squares[i][1];
+                } else {
+                    startxs.push(this.squares[i][0])
+                    startys.push(this.squares[i][1])
+                }
+            }
+            ctx.fillStyle=toOpacity(this.color,0.2)
+            for (let i=0;i<startxs.length;i++){
+                ctx.fillRect(screenX+startxs[i]*squareDim,screenY+squareDim*(startys[i]-this.trailLength),squareDim,this.trailLength*squareDim);
+            }
+        }
+        for (let i=this.squares.length-1; i>=0; i--){
+            if (this.squares[i][1]>=0 && this.squares[i][1] + this.squareOffsets[i]/squareDim < 20) drawSquare(this.color, this.opacity, screenX, screenY+this.squareOffsets[i], this.squares[i][0], this.squares[i][1], 0, 0);
+            if (disappearingTimer==0 && this.squareOffsets[i]<0){
+                this.squareOffsets[i]+=squareDim/2;
+                if (this.squareOffsets[i]>0) this.squareOffsets[i]=0;
+            }
+            if (this.disappearing[i] && (9-(disappearingTimer/2)==this.squares[i][0])){
+                this.squares.splice(i,1);
+                this.squareOffsets.splice(i,1);
+                this.disappearing.splice(i,1);
+            }
         }
     }
 
     drop(){
         while (!this.isOverlapping()){
+            this.trailLength++;
             this.y++;
             score+=2
             for (let i=0;i<this.squares.length;i++){
                 this.squares[i][1]++;
             }
         }
+        disappearingTimer=5;
         this.y--;
+        this.trailLength--;
         score-=2;
         for (let i=0;i<this.squares.length;i++){
             this.squares[i][1]--;
@@ -538,8 +633,9 @@ class Block {
         this.placeBlock();
     }
 
-    placeBlock(){ // returns the number of 
+    placeBlock(){ // returns the number of lines removed
         this.opacity=1;
+        this.placed=true;
         blocks.push(this);
         canHold = true;
         lockDelayTimer=0;
@@ -570,6 +666,9 @@ class Block {
         fallingBlock= new Block(getNext());
         if (fallingBlock.isOverlapping()){
             gameOver=true;
+        }
+        if (count>=1){
+            disappearingTimer=20;
         }
         givePoints(count);
         return count;
@@ -663,8 +762,15 @@ class Block {
 
     eliminateRow(row){
         for (let i=this.squares.length-1; i>=0; i--){
-            if (this.squares[i][1]==row) this.squares.splice(i,1);
-            else if (this.squares[i][1]<row) this.squares[i][1]++;
+            if (this.squares[i][1]==row){
+                this.disappearing[i]=true;
+                //this.squares.splice(i,1);
+                //this.squareOffsets.splice(i,1)
+            }
+            else if (this.squares[i][1]<row) {
+                this.squares[i][1]++;
+                this.squareOffsets[i]-=squareDim;
+            }
         }
         if (this.squares.length==0) {
             remove(blocks,this)
