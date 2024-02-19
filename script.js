@@ -508,6 +508,7 @@ class Block {
         this.squares=structuredClone(blockLayouts[this.id]);
         this.color=blockColors[this.id];
         this.opacity=1;
+        this.trailLength=0;
 
         for (let i=0; i<this.squares.length; i++){
             this.squares[i][1]=this.y+blockLayouts[this.id][i][1];
@@ -517,6 +518,25 @@ class Block {
     }
 
     drawBlock(){
+        if (this.trailLength>0){
+            this.trailLength-=2;
+            let startxs=[];
+            let startys=[]
+            for (let i=0; i<this.squares.length; i++){
+                let index=startxs.indexOf(this.squares[i][0])
+                if (index!=-1){
+                    if (this.squares[i][1] < startys[index]) startys[index]=this.squares[i][1];
+                } else {
+                    startxs.push(this.squares[i][0])
+                    startys.push(this.squares[i][1])
+                }
+            }
+            console.log(startxs)
+            ctx.fillStyle=toOpacity(this.color,0.2)
+            for (let i=0;i<startxs.length;i++){
+                ctx.fillRect(screenX+startxs[i]*squareDim,screenY+squareDim*(startys[i]-this.trailLength),squareDim,this.trailLength*squareDim);
+            }
+        }
         for (let i=0; i<this.squares.length; i++){
             if (this.squares[i][1]>=0 && this.squares[i][1] < 20) drawSquare(this.color, this.opacity, screenX, screenY, this.squares[i][0], this.squares[i][1], 0, 0);
         }
@@ -524,6 +544,7 @@ class Block {
 
     drop(){
         while (!this.isOverlapping()){
+            this.trailLength++;
             this.y++;
             score+=2
             for (let i=0;i<this.squares.length;i++){
@@ -531,6 +552,7 @@ class Block {
             }
         }
         this.y--;
+        this.trailLength--;
         score-=2;
         for (let i=0;i<this.squares.length;i++){
             this.squares[i][1]--;
