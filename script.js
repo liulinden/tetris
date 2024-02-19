@@ -556,7 +556,7 @@ class Block {
                 this.squareOffsets[i]+=squareDim/2;
                 if (this.squareOffsets[i]>0) this.squareOffsets[i]=0;
             }
-            if (this.disappearing[i] && (9-(disappearingTimer/3)==this.squares[i][0])){
+            if (this.disappearing[i] && (9-(disappearingTimer/2)==this.squares[i][0])){
                 this.squares.splice(i,1);
                 this.squareOffsets.splice(i,1);
                 this.disappearing.splice(i,1);
@@ -617,7 +617,7 @@ class Block {
             gameOver=true;
         }
         if (count>=1){
-            disappearingTimer=30;
+            disappearingTimer=20;
         }
         givePoints(count);
         return count;
