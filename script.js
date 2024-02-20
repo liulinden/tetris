@@ -1,4 +1,4 @@
-//TODO: add restart button, fix game end so that when pieces r rlly high up the pieces auto generate to be higher, add better left/right key with initial delay, add animation for instant drop
+//TODO: add better left/right key with initial delay
 
 const canvas = document.getElementById('cvs')
 
@@ -70,11 +70,13 @@ let fastFallInterval = 3;
 let transformTimer=1;
 let fallTimer=1;
 
+let blockBag = [0,1,2,3,4,5,6]
 let blocks = [];
 let next = [];
 let holdBlock = -1;
 let textEffects = [];
 
+let fallingBlock;
 let score = 0;
 let lines =0;
 let level = 1;
@@ -109,7 +111,7 @@ let combo=0;
 
 function gameloop() {
     level=1+Math.floor(lines/10);
-    blockFallInterval=Math.max(1,60-5*level);
+    blockFallInterval=Math.max(1,Math.round(43/level));
     setDimensions();
 
     if (disappearingTimer>0){
@@ -205,8 +207,6 @@ function gameloop() {
         }
     }
 
-    
-
     drawFrame()
     if (!gameOver) requestAnimationFrame(gameloop); 
     else {
@@ -288,11 +288,12 @@ function keyUp(event){
 function resetGame() {
     blockFallInterval = 60;
     shiftInterval = 6;
-    fastFallInterval = 3;
+    fastFallInterval = 2;
 
     transformTimer=1;
     fallTimer=1;
 
+    blockBag=[0,1,2,3,4,5,6];
     blocks = [];
     next = [];
     holdBlock = -1;
@@ -521,8 +522,16 @@ function getNext(){
     save = next[0];
     next[0]=next[1];
     next[1]=next[2];
-    next[2]=Math.floor(Math.random()*7);
+    next[2]=getFromBag();
     return save;
+}
+
+function getFromBag(){
+    chosen =Math.floor(blockBag.length * Math.random());
+    out= blockBag[chosen];
+    blockBag.splice(chosen,1);
+    if (blockBag.length==0) blockBag=[0,1,2,3,4,5,6];
+    return out;
 }
 
 class TextEffect {
@@ -817,11 +826,10 @@ class Block {
 function startGame(){
     next=[]
     for (let i=0;i<3;i++){
-        next.push(Math.floor(Math.random()*7))
+        next.push(getFromBag())
     }
-    fallingBlock= new Block(Math.floor(Math.random()*7));
+    fallingBlock= new Block(getNext());
     gameloop();
 }
 
-let fallingBlock= new Block(Math.floor(Math.random()*7));
 startGame();
