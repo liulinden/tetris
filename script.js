@@ -111,7 +111,14 @@ let combo=0;
 
 function gameloop() {
     level=1+Math.floor(lines/10);
-    blockFallInterval=Math.max(1,Math.round(43/level));
+    if (level<12) blockFallInterval=65-level*5;
+    else if (level==12) blockFallInterval= 7;
+    else if (level<15) blockFallInterval=6;
+    else if (level<17) blockFallInterval=5;
+    else if (level<20) blockFallInterval=4;
+    else if (level<24) blockFallInterval=3;
+    else if (level<29) blockFallInterval=2;
+    else blockFallInterval=1;
     setDimensions();
 
     if (disappearingTimer>0){
