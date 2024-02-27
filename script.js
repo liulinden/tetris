@@ -480,19 +480,55 @@ function toOpacity(color,opacity){
 function changeColor(color,dr,dg,db){
     return [Math.min(255,Math.max(0,color[0]+dr)),Math.min(255,Math.max(0,color[1]+dg)),Math.min(255,Math.max(0,color[2]+db))]
 }
+function centeredRectFill(x,y,width,height){
+    ctx.fillRect(x-width/2,y-width/2,Math.ceil(width+0.5),Math.ceil(height+0.5))
+}
+
+function centeredRectStroke(x,y,width,height){
+    ctx.strokeRect(x-width/2,y-width/2,Math.ceil(width),Math.ceil(height))
+}
+
+function drawSquareOutline(refx,refy,x,y){
+    wdth=Math.round(squareDim/40)*2;
+    ctx.lineWidth=wdth
+    ctx.strokeStyle='rgb(220,220,220)'
+    ctx.strokeRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,squareDim-2*wdth);
+}
 
 function drawSquare(color,opacity,refx, refy, x,y){
     wdth=Math.round(squareDim/40)*2;
     ctx.fillStyle=toOpacity(color,opacity);
+
+    centerX=Math.floor(refx+x*squareDim+squareDim/2)
+    centerY=Math.floor(refy+y*squareDim+squareDim/2)
+
+    /*
+    ctx.fillStyle=toOpacity(changeColor(color,-120,-120,-120),opacity);
+    centeredRectFill(centerX,centerY,squareDim,squareDim);
+    ctx.fillStyle=toOpacity(color,opacity);
+    centeredRectFill(centerX,centerY,squareDim*0.9,squareDim*0.9);
+    ctx.fillStyle=toOpacity(changeColor(color,-40,-40,-40),opacity);
+    ctx.strokeStyle=toOpacity(changeColor(color,-40,-40,-40),opacity);
+    ctx.lineWidth=wdth
+    centeredRectFill(centerX,centerY,squareDim/2,squareDim/2);
+    centeredRectStroke(centerX,centerY,squareDim*0.75,squareDim*0.75);
+    ctx.fillStyle=toOpacity([220,220,220],opacity);
+    ctx.fillRect(Math.floor(refx+(x+0.05)*squareDim),Math.floor(refy+(y+0.05)*squareDim),wdth*2,wdth*2)
+    */
+
     //ctx.fillRect(Math.floor(refx+x*squareDim),Math.floor(refy+y*squareDim),squareDim,squareDim);
+    
     ctx.fillRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,squareDim-2*wdth)
     ctx.fillStyle=toOpacity(changeColor(color,50,50,50),opacity);
-    ctx.fillRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,(squareDim-2*wdth)/3)
+    ctx.beginPath()
+    ctx.roundRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,(squareDim-2*wdth)/3,[0,0,(squareDim-2*wdth)/3,(squareDim-2*wdth)/3])
+    ctx.fill()
     ctx.lineWidth=wdth
     ctx.strokeStyle=toOpacity(changeColor(color,50,50,50),1)
     ctx.strokeRect(Math.floor(refx+x*squareDim+wdth),Math.floor(refy+y*squareDim+wdth),squareDim-2*wdth,squareDim-2*wdth);
     ctx.strokeStyle=toOpacity(changeColor(color,-100,-100,-100),opacity)
     ctx.strokeRect(Math.floor(refx+x*squareDim+2*wdth),Math.floor(refy+y*squareDim+2*wdth),squareDim-4*wdth,squareDim-4*wdth);
+    
 }
 
 function isRowComplete(row){
@@ -647,10 +683,13 @@ class Block {
                     startys.push(this.squares[i][1])
                 }
             }
-            ctx.fillStyle=toOpacity(this.color,0.2)
+            ctx.fillStyle=toOpacity(this.color,0.3)
             for (let i=0;i<startxs.length;i++){
                 ctx.fillRect(screenX+startxs[i]*squareDim,screenY+squareDim*(startys[i]-this.trailLength),squareDim,this.trailLength*squareDim);
             }
+        }
+        else if (!this.placed){
+            this.drawGhost()
         }
         for (let i=this.squares.length-1; i>=0; i--){
             if (this.squares[i][1]>=0 && this.squares[i][1] + this.squareOffsets[i]/squareDim < 20) drawSquare(this.color, this.opacity, screenX, screenY+this.squareOffsets[i], this.squares[i][0], this.squares[i][1], 0, 0);
@@ -663,6 +702,35 @@ class Block {
                 this.squareOffsets.splice(i,1);
                 this.disappearing.splice(i,1);
             }
+        }
+    }
+
+    drawGhost(){
+        let offset=0;
+        while (!this.isOverlapping()){
+            offset++;
+            for (let i=0;i<this.squares.length;i++){
+                this.squares[i][1]++;
+            }
+        }
+        offset--;
+        for (let i=0;i<this.squares.length;i++){
+            this.squares[i][1]--;
+        }
+        for (let i=this.squares.length-1; i>=0; i--){
+            if (this.squares[i][1]>=0 && this.squares[i][1] + this.squareOffsets[i]/squareDim < 20) drawSquareOutline(screenX, screenY+this.squareOffsets[i], this.squares[i][0], this.squares[i][1], 0, 0);
+            if (disappearingTimer==0 && this.squareOffsets[i]<0){
+                this.squareOffsets[i]+=squareDim/2;
+                if (this.squareOffsets[i]>0) this.squareOffsets[i]=0;
+            }
+            if (this.disappearing[i] && (9-(disappearingTimer/2)==this.squares[i][0])){
+                this.squares.splice(i,1);
+                this.squareOffsets.splice(i,1);
+                this.disappearing.splice(i,1);
+            }
+        }
+        for (let i=0;i<this.squares.length;i++){
+            this.squares[i][1]-=offset;
         }
     }
 
