@@ -34,6 +34,9 @@ let sboardX=0;
 let sboardY=0;
 let sboardWidth=0;
 let sboardHeight=0;
+let shakeY=0;
+let shakeTimer=-1;
+let shakeStrength=5;
 
 const blockLayouts = [
     [[0,1],[1,1],[2,1],[3,1]], //line
@@ -119,6 +122,7 @@ function gameloop() {
     else if (level<24) blockFallInterval=3;
     else if (level<29) blockFallInterval=2;
     else blockFallInterval=1;
+    shakeStuff();
     setDimensions();
 
     if (disappearingTimer>0){
@@ -227,6 +231,8 @@ function gameOverScreen(){
     for (let i=textEffects.length-1; i>=0;i--){
         textEffects[i].update();
     }
+    shakeStuff()
+    setDimensions()
     drawFrame()
     if (gameOver) requestAnimationFrame(gameOverScreen);
 }
@@ -336,6 +342,7 @@ function setDimensions() {
     sboardWidth=holdWidth;
     sboardX=holdX;
     sboardY=screenY+screenHeight-sboardHeight;
+    screenY+=shakeY;
 }
 
 function drawFrame() {
@@ -387,6 +394,35 @@ function drawFrame() {
 
     for (let i=0;i<textEffects.length; i++){
         textEffects[i].draw();
+    }
+}
+
+function shakeStuff(){
+    if (shakeTimer<0){
+        shakeY=0;
+    } else{
+        shakeTimer++;
+        if (shakeTimer==1){
+            if ((shakeY)<0) shakeY=0;
+            shakeY+=shakeStrength;
+        }
+        else if (shakeTimer<5){
+            shakeY+=shakeStrength;
+        } else if (shakeTimer<10){
+            shakeY-=shakeStrength;
+        } else if (shakeTimer<14){
+            shakeY+=shakeStrength;
+        } else if (shakeY>0){
+            shakeY-=shakeStrength;
+            shakeStrength+=0.2
+            if (shakeY<=0){
+                shakeY=0;
+                shakeTimer=-1;
+            }
+        } else {
+            shakeY=0;
+            shakeTimer=-1;
+        }
     }
 }
 
@@ -631,22 +667,27 @@ class Block {
     }
 
     drop(){
+        let d=0
         while (!this.isOverlapping()){
             this.trailLength++;
             this.y++;
-            score+=2
+            score+=2;
+            d++;
             for (let i=0;i<this.squares.length;i++){
                 this.squares[i][1]++;
             }
         }
         disappearingTimer=5;
         this.y--;
+        d--;
         this.trailLength--;
         score-=2;
         for (let i=0;i<this.squares.length;i++){
             this.squares[i][1]--;
         }
         this.placeBlock();
+        shakeTimer=0;
+        shakeStrength=Math.max(3,d);
     }
 
     placeBlock(){ // returns the number of lines removed
@@ -677,7 +718,7 @@ class Block {
         }
 
         for (let i=0;i<this.squares.length;i++){
-            if (this.squares[i][1]<=0) gameOver=true;
+            if (this.squares[i][1]<0) gameOver=true;
         }
         fallingBlock= new Block(getNext());
         if (fallingBlock.isOverlapping()){
